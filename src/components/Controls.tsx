@@ -57,7 +57,7 @@ export const Controls = () => {
         title={'Type fietspad'}
         options={typeOptions}
         onChange={(value) => {
-          console.log('setting value', value)
+          // console.log('setting value', value)
         }}
       />
 
@@ -67,7 +67,7 @@ export const Controls = () => {
         title={'Type wegdek'}
         options={surfaceOptions}
         onChange={(value) => {
-          console.log('setting value', value)
+          // console.log('setting value', value)
         }}
       />
 
@@ -77,7 +77,7 @@ export const Controls = () => {
         title={'Staat wegdek'}
         options={conditionOptions}
         onChange={(value) => {
-          console.log('setting value', value)
+          // console.log('setting value', value)
         }}
       />
     </div>

@@ -13,10 +13,8 @@ const roads = async (req: NextApiRequest, res: NextApiResponse) => {
     '&path=' +
     path
 
-  console.log(url)
   const response = await fetch(url)
   const data = await response.json()
-  console.log('data', data)
 
   res.status(200).json(data)
 }

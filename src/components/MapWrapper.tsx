@@ -16,11 +16,15 @@ export default function MapWrapper() {
 
   return (
     <Wrapper
-      apiKey={process.env.NEXT_PUBLIC_GMAPS_API_KEY}
+      apiKey={process.env.NEXT_PUBLIC_GMAPS_API_KEY || ''}
       render={render}
       libraries={['drawing']}
     >
-      <Map center={center} zoom={15} style={{ flexGrow: '1', height: '100%' }} />
+      <Map
+        center={center}
+        zoom={15}
+        style={{ flexGrow: '1', height: '100%' }}
+      />
       <div className="absolute right-0 top-0 w-60 py-2 px-4 bg-white">
         <Controls />
       </div>

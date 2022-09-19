@@ -74,7 +74,12 @@ export const drawMachine = createMachine(
       },
       processing: {
         invoke: {
-          src: (_, event) => processDrawing(event.path),
+          src: (context, event) => {
+            if (event.type !== 'FINISH_DRAWING') {
+              return Promise.resolve(context.snappedPath)
+            }
+            return processDrawing(event.path)
+          },
           onDone: {
             target: 'idle',
             actions: assign((_, event) => ({
