@@ -1,4 +1,11 @@
 import { useState } from 'react'
+import { useMachine } from '@xstate/react'
+import {
+  RoadCondition,
+  roadSelectorMachine,
+  RoadSurface,
+  RoadType,
+} from '../machines/controls'
 
 type PickerType = {
   title: string
@@ -42,6 +49,8 @@ const Picker = ({ title, options, onChange }: PickerType) => {
 }
 
 export const Controls = () => {
+  const [state, send] = useMachine(roadSelectorMachine)
+
   const typeOptions: string[] = ['Fietsstrook', 'Geen']
   const surfaceOptions: string[] = ['Asfalt', 'Klinkers', 'Beton', 'Offroad']
   const conditionOptions: string[] = [
@@ -53,11 +62,12 @@ export const Controls = () => {
 
   return (
     <div className="flex flex-col">
+      {JSON.stringify(state.context)}
       <Picker
         title={'Type fietspad'}
         options={typeOptions}
         onChange={(value) => {
-          // console.log('setting value', value)
+          send({ type: 'SET_ROADTYPE', roadType: value as RoadType })
         }}
       />
 
@@ -67,7 +77,7 @@ export const Controls = () => {
         title={'Type wegdek'}
         options={surfaceOptions}
         onChange={(value) => {
-          // console.log('setting value', value)
+          send({ type: 'SET_ROADSURFACE', roadSurface: value as RoadSurface })
         }}
       />
 
@@ -77,7 +87,10 @@ export const Controls = () => {
         title={'Staat wegdek'}
         options={conditionOptions}
         onChange={(value) => {
-          // console.log('setting value', value)
+          send({
+            type: 'SET_ROADCONDITION',
+            roadCondition: value as RoadCondition,
+          })
         }}
       />
     </div>

@@ -11,8 +11,6 @@ type DrawEvents =
     }
   | { type: 'CANCEL_DRAWING' }
   | { type: 'FINISH_DRAWING'; path: string }
-  | { type: '' }
-  | { type: '' }
 
 const processDrawing = async (path: string) => {
   // Snap a user-created polyline to roads and return the snapped path
@@ -36,10 +34,9 @@ const processDrawing = async (path: string) => {
   return snappedCoordinates
 }
 
-export const drawMachine = createMachine(
+export const drawMachine = createMachine<DrawContext, DrawEvents>(
   {
     id: 'draw',
-    tsTypes: {} as import('./draw.typegen').Typegen0,
     predictableActionArguments: true,
     schema: {
       context: {} as DrawContext,
@@ -81,7 +78,7 @@ export const drawMachine = createMachine(
             return processDrawing(event.path)
           },
           onDone: {
-            target: 'idle',
+            target: 'drawing',
             actions: assign((_, event) => ({
               snappedPath: event.data,
             })),
