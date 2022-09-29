@@ -6,6 +6,7 @@ import { createCustomEqual } from 'fast-equals'
 
 import { drawMachine } from '../machines/draw'
 import { Controls } from './Controls'
+import { roadSelectorMachine } from '../machines/road'
 
 const render = (status: Status) => {
   return <div>{status}</div>
@@ -28,9 +29,6 @@ export default function MapWrapper() {
         zoom={15}
         style={{ flexGrow: '1', height: '100%' }}
       />
-      <div className="absolute right-0 top-0 w-60 py-2 px-4 bg-white">
-        <Controls />
-      </div>
     </Wrapper>
   )
 }
@@ -141,6 +139,7 @@ export const DrawLayer = ({ map }: DrawLayerProps) => {
   const [drawingManager, setDrawingManager] =
     useState<google.maps.drawing.DrawingManager>()
   const [initialDraw, setInitialDraw] = useState(false)
+  const [color, setColor] = useState<string>('#BADA55')
 
   const [state, send] = useMachine(drawMachine)
 
@@ -159,14 +158,6 @@ export const DrawLayer = ({ map }: DrawLayerProps) => {
     })
     if (manager) {
       setDrawingManager(manager)
-      // send('SET_DRAWING')
-      // const mockPath = [
-      //   '51.092172,3.758068',
-      //   '51.089368,3.758626',
-      //   '51.08732,3.758282',
-      //   '51.088452,3.764247',
-      // ]
-      // send({ type: 'FINISH_DRAWING', path: mockPath.join('|') })
     }
   }, [])
 
@@ -193,7 +184,7 @@ export const DrawLayer = ({ map }: DrawLayerProps) => {
     }
     var snappedPolyline = new google.maps.Polyline({
       path: state.context.snappedPath,
-      strokeColor: '#BADA55',
+      strokeColor: color,
       strokeWeight: 10,
       strokeOpacity: 0.5,
       draggable: true,
@@ -225,5 +216,11 @@ export const DrawLayer = ({ map }: DrawLayerProps) => {
     })
   }, [state.context.existingPaths])
 
-  return <div className="absolute top-0 left-0 w-16 h-10 z-40"></div>
+  return (
+    <div className="">
+      <div className="absolute right-0 top-0 w-60 py-2 px-4 bg-white">
+        <Controls onColorUpdate={(color: string) => setColor(color)} />
+      </div>
+    </div>
+  )
 }

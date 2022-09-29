@@ -6,7 +6,7 @@ import {
   roadSelectorMachine,
   RoadSurface,
   RoadType,
-} from '../machines/controls'
+} from '../machines/road'
 
 type PickerType = {
   title: string
@@ -49,12 +49,29 @@ const Picker = ({ title, options, onChange }: PickerType) => {
   )
 }
 
-export const Controls = () => {
-  const [state, send] = useMachine(roadSelectorMachine)
+type ControlsProps = {
+  onColorUpdate: (color: string) => void
+}
+
+export const Controls = ({ onColorUpdate }: ControlsProps) => {
+  const [state, send, service] = useMachine(roadSelectorMachine)
 
   const typeOptions = Object.values(RoadType)
   const surfaceOptions = Object.values(RoadSurface)
   const conditionOptions = Object.values(RoadCondition)
+
+  service.onChange((state) => {
+    console.log('state', state)
+
+    const colors = {
+      [RoadCondition['very good']]: '#00FFFF',
+      [RoadCondition['good']]: '#0000FF',
+      [RoadCondition['average']]: '#555555',
+      [RoadCondition['bad']]: '#FF0000',
+    }
+
+    onColorUpdate(colors[state.roadCondition])
+  })
 
   // TODO: fix casts for variable 'value'
 
