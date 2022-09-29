@@ -3,6 +3,7 @@ import { assign, createMachine } from 'xstate'
 type DrawContext = {
   drawnPath: any[] // this is what we get from the drawingmanager
   snappedPath: any[]
+  existingPaths: any[]
 }
 
 type DrawEvents =
@@ -23,15 +24,26 @@ const processDrawing = async (path: string) => {
   const data = await res.json()
 
   const snappedCoordinates = []
-  for (var i = 0; i < data.snappedPoints.length; i++) {
-    var latlng = new google.maps.LatLng(
+  for (let i = 0; i < data.snappedPoints.length; i++) {
+    const latlng = new google.maps.LatLng(
       data.snappedPoints[i].location.latitude,
       data.snappedPoints[i].location.longitude
     )
-    snappedCoordinates.push(latlng)
+    snappedCoordinates.push({ lat: latlng.lat(), lng: latlng.lng() })
   }
 
+  await fetch('/api/routes', {
+    method: 'PUT',
+    body: JSON.stringify({ snappedCoordinates }),
+  })
+
   return snappedCoordinates
+}
+
+const fetchRoutes = async () => {
+  const res = await fetch('/api/routes')
+  const data = await res.json()
+  return data
 }
 
 export const drawMachine = createMachine<DrawContext, DrawEvents>(
@@ -50,9 +62,19 @@ export const drawMachine = createMachine<DrawContext, DrawEvents>(
     initial: 'idle',
     states: {
       idle: {
-        entry: assign(() => ({
-          drawnPath: [],
-        })),
+        invoke: {
+          src: async () => {
+            const routes = await fetchRoutes()
+            return routes
+          },
+          onDone: {
+            target: 'drawing',
+            actions: assign((_, event) => ({
+              existingPaths: event.data.map((d: any) => d.latlngString),
+            })),
+          },
+          onError: { target: 'error' },
+        },
         on: {
           SET_DRAWING: {
             target: 'drawing',
@@ -79,8 +101,9 @@ export const drawMachine = createMachine<DrawContext, DrawEvents>(
           },
           onDone: {
             target: 'drawing',
-            actions: assign((_, event) => ({
+            actions: assign((context, event) => ({
               snappedPath: event.data,
+              existingPaths: [...(context.existingPaths || []), event.data],
             })),
           },
           onError: {

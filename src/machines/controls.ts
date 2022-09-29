@@ -49,6 +49,7 @@ export const roadSelectorMachine = createMachine<
     },
     initial: 'selected',
     states: {
+      // TODO: use parallel states here, one for each variable
       selected: {
         on: {
           SET_ROADTYPE: {

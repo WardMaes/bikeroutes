@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMachine } from '@xstate/react'
+
 import {
   RoadCondition,
   roadSelectorMachine,
@@ -51,20 +52,17 @@ const Picker = ({ title, options, onChange }: PickerType) => {
 export const Controls = () => {
   const [state, send] = useMachine(roadSelectorMachine)
 
-  const typeOptions: string[] = ['Fietsstrook', 'Geen']
-  const surfaceOptions: string[] = ['Asfalt', 'Klinkers', 'Beton', 'Offroad']
-  const conditionOptions: string[] = [
-    'Heel goed',
-    'Goed',
-    'Gemiddeld',
-    'Slecht',
-  ]
+  const typeOptions = Object.values(RoadType)
+  const surfaceOptions = Object.values(RoadSurface)
+  const conditionOptions = Object.values(RoadCondition)
+
+  // TODO: fix casts for variable 'value'
 
   return (
     <div className="flex flex-col">
       {JSON.stringify(state.context)}
       <Picker
-        title={'Type fietspad'}
+        title={'Type'}
         options={typeOptions}
         onChange={(value) => {
           send({ type: 'SET_ROADTYPE', roadType: value as RoadType })
@@ -74,7 +72,7 @@ export const Controls = () => {
       <Divider />
 
       <Picker
-        title={'Type wegdek'}
+        title={'Surface'}
         options={surfaceOptions}
         onChange={(value) => {
           send({ type: 'SET_ROADSURFACE', roadSurface: value as RoadSurface })
@@ -84,7 +82,7 @@ export const Controls = () => {
       <Divider />
 
       <Picker
-        title={'Staat wegdek'}
+        title={'Condition'}
         options={conditionOptions}
         onChange={(value) => {
           send({

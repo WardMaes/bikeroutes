@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { Wrapper, Status } from '@googlemaps/react-wrapper'
-
-import { Controls } from './Controls'
 import { useMachine } from '@xstate/react'
-
-import { createCustomEqual } from 'fast-equals'
+import { Wrapper, Status } from '@googlemaps/react-wrapper'
 import { isLatLngLiteral } from '@googlemaps/typescript-guards'
+import { createCustomEqual } from 'fast-equals'
+
 import { drawMachine } from '../machines/draw'
+import { Controls } from './Controls'
 
 const render = (status: Status) => {
   return <div>{status}</div>
@@ -111,7 +110,6 @@ const deepCompareEqualsForMaps = createCustomEqual(
     }
 
     // TODO extend to other types
-
     // use fast-equals for other objects
     // @ts-ignore
     return deepEqual(a, b)
@@ -142,6 +140,7 @@ type DrawLayerProps = {
 export const DrawLayer = ({ map }: DrawLayerProps) => {
   const [drawingManager, setDrawingManager] =
     useState<google.maps.drawing.DrawingManager>()
+  const [initialDraw, setInitialDraw] = useState(false)
 
   const [state, send] = useMachine(drawMachine)
 
@@ -160,7 +159,14 @@ export const DrawLayer = ({ map }: DrawLayerProps) => {
     })
     if (manager) {
       setDrawingManager(manager)
-      send('SET_DRAWING')
+      // send('SET_DRAWING')
+      // const mockPath = [
+      //   '51.092172,3.758068',
+      //   '51.089368,3.758626',
+      //   '51.08732,3.758282',
+      //   '51.088452,3.764247',
+      // ]
+      // send({ type: 'FINISH_DRAWING', path: mockPath.join('|') })
     }
   }, [])
 
@@ -197,98 +203,27 @@ export const DrawLayer = ({ map }: DrawLayerProps) => {
     snappedPolyline.setMap(map)
   }, [state.context.snappedPath])
 
-  // Add heatmap data
-  // useEffect(() => {
-  //   const mockData = [
-  //     {
-  //       location: {
-  //         latitude: 51.09470285365336,
-  //         longitude: 3.756872274385499,
-  //       },
-  //       originalIndex: 0,
-  //       placeId: 'ChIJQWXZZTd3w0cRjTfhgw2sy2g',
-  //     },
-  //     {
-  //       location: {
-  //         latitude: 51.0947695,
-  //         longitude: 3.7570693000000004,
-  //       },
-  //       placeId: 'ChIJQWXZZTd3w0cRjTfhgw2sy2g',
-  //     },
-  //     {
-  //       location: {
-  //         latitude: 51.0947695,
-  //         longitude: 3.7570693000000004,
-  //       },
-  //       placeId: 'ChIJtxQA1zl3w0cRhGuA65owvSU',
-  //     },
-  //     {
-  //       location: {
-  //         latitude: 51.094856,
-  //         longitude: 3.7572848999999997,
-  //       },
-  //       placeId: 'ChIJtxQA1zl3w0cRhGuA65owvSU',
-  //     },
-  //     {
-  //       location: {
-  //         latitude: 51.0949453,
-  //         longitude: 3.7574714,
-  //       },
-  //       placeId: 'ChIJtxQA1zl3w0cRhGuA65owvSU',
-  //     },
-  //     {
-  //       location: {
-  //         latitude: 51.095283699999996,
-  //         longitude: 3.7581281,
-  //       },
-  //       placeId: 'ChIJtxQA1zl3w0cRhGuA65owvSU',
-  //     },
-  //     {
-  //       location: {
-  //         latitude: 51.0955328,
-  //         longitude: 3.758667300000001,
-  //       },
-  //       placeId: 'ChIJtxQA1zl3w0cRhGuA65owvSU',
-  //     },
-  //     {
-  //       location: {
-  //         latitude: 51.0955328,
-  //         longitude: 3.758667300000001,
-  //       },
-  //       placeId: 'ChIJ_51xzDl3w0cR5TbZIUiaHpQ',
-  //     },
-  //     {
-  //       location: {
-  //         latitude: 51.09552643777874,
-  //         longitude: 3.7586761537607134,
-  //       },
-  //       originalIndex: 1,
-  //       placeId: 'ChIJ_51xzDl3w0cR5TbZIUiaHpQ',
-  //     },
-  //     {
-  //       location: {
-  //         latitude: 51.095317679619995,
-  //         longitude: 3.7589666628180356,
-  //       },
-  //       originalIndex: 2,
-  //       placeId: 'ChIJ_51xzDl3w0cR5TbZIUiaHpQ',
-  //     },
-  //   ]
+  useEffect(() => {
+    if (!map || !state.context.existingPaths || initialDraw) {
+      return
+    }
+    state.context.existingPaths.forEach((path) => {
+      var snappedPolyline = new google.maps.Polyline({
+        path: path.map((p: any) => ({
+          ...p,
+          lat: Number(p.lat),
+          lng: Number(p.lng),
+        })),
+        strokeColor: '#BADA55',
+        strokeWeight: 10,
+        strokeOpacity: 0.5,
+        draggable: true,
+        editable: true,
+      })
+      setInitialDraw(true)
+      snappedPolyline.setMap(map)
+    })
+  }, [state.context.existingPaths])
 
-  //   const heatmapData = mockData.map(
-  //     (point) =>
-  //       new google.maps.LatLng(
-  //         point.location.latitude,
-  //         point.location.longitude
-  //       )
-  //   )
-
-  //   const heatmap = new google.maps.visualization.HeatmapLayer({
-  //     data: heatmapData,
-  //     dissipating: false,
-  //     map: map,
-  //   })
-  // }, [map])
-
-  return <></>
+  return <div className="absolute top-0 left-0 w-16 h-10 z-40"></div>
 }
