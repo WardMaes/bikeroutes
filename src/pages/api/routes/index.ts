@@ -1,5 +1,6 @@
 // src/pages/api/route.ts
 import type { NextApiRequest, NextApiResponse } from 'next'
+import { RoadCondition, RoadSurface, RoadType } from '../../../machines/draw'
 
 import { prisma } from '../../../server/db/client'
 
@@ -14,6 +15,9 @@ const routes = async (req: NextApiRequest, res: NextApiResponse) => {
   } else if (req.method === 'PUT') {
     const body = JSON.parse(req.body) as {
       snappedCoordinates: { lat: number; lng: number }[]
+      roadCondition: RoadCondition
+      roadSurface: RoadSurface
+      roadType: RoadType
     }
 
     const route = await prisma.route.create({
@@ -23,6 +27,9 @@ const routes = async (req: NextApiRequest, res: NextApiResponse) => {
             data: body.snappedCoordinates,
           },
         },
+        type: body.roadType,
+        surface: body.roadSurface,
+        condition: body.roadCondition,
       },
       include: {
         latlngString: true,

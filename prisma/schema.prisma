@@ -69,6 +69,9 @@ model VerificationToken {
 model Route {
   id           Int      @id @default(autoincrement())
   latlngString LatLng[]
+  type         String
+  surface      String
+  condition    String
 }
 
 model LatLng {

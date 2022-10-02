@@ -1,12 +1,8 @@
-import { useState } from 'react'
-import { useMachine } from '@xstate/react'
+import { useContext, useEffect, useState } from 'react'
+import { useActor } from '@xstate/react'
 
-import {
-  RoadCondition,
-  roadSelectorMachine,
-  RoadSurface,
-  RoadType,
-} from '../machines/road'
+import { RoadCondition, RoadSurface, RoadType } from '../machines/draw'
+import { GlobalStateContext } from '../pages/_app'
 
 type PickerType = {
   title: string
@@ -18,7 +14,15 @@ type ArrayElement<ArrayType extends readonly unknown[]> =
   ArrayType extends readonly (infer ElementType)[] ? ElementType : never
 
 const Picker = ({ title, options, onChange }: PickerType) => {
-  const [value, setValue] = useState<ArrayElement<typeof options>>()
+  const [value, setValue] = useState<ArrayElement<typeof options>>(
+    options[0] || ''
+  )
+
+  useEffect(() => {
+    if (options[0]) {
+      onChange(options[0])
+    }
+  }, [])
 
   return (
     <div className="flex flex-col">
@@ -49,35 +53,23 @@ const Picker = ({ title, options, onChange }: PickerType) => {
   )
 }
 
-type ControlsProps = {
-  onColorUpdate: (color: string) => void
-}
+export const Controls = () => {
+  const globalServices = useContext(GlobalStateContext)
+  const [state, send] = useActor(globalServices.drawService)
 
-export const Controls = ({ onColorUpdate }: ControlsProps) => {
-  const [state, send, service] = useMachine(roadSelectorMachine)
-
-  const typeOptions = Object.values(RoadType)
-  const surfaceOptions = Object.values(RoadSurface)
-  const conditionOptions = Object.values(RoadCondition)
-
-  service.onChange((state) => {
-    console.log('state', state)
-
-    const colors = {
-      [RoadCondition['very good']]: '#00FFFF',
-      [RoadCondition['good']]: '#0000FF',
-      [RoadCondition['average']]: '#555555',
-      [RoadCondition['bad']]: '#FF0000',
-    }
-
-    onColorUpdate(colors[state.roadCondition])
-  })
+  const typeOptions: RoadType[] = ['fietsstrook', 'none']
+  const surfaceOptions: RoadSurface[] = ['asphalt', 'concrete', 'offroad']
+  const conditionOptions: RoadCondition[] = [
+    'very good',
+    'good',
+    'average',
+    'bad',
+  ]
 
   // TODO: fix casts for variable 'value'
 
   return (
     <div className="flex flex-col">
-      {JSON.stringify(state.context)}
       <Picker
         title={'Type'}
         options={typeOptions}

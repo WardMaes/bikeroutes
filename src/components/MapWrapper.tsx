@@ -1,12 +1,19 @@
-import React, { useState, useEffect } from 'react'
-import { useMachine } from '@xstate/react'
+import React, { useState, useEffect, useContext } from 'react'
+import { useActor } from '@xstate/react'
 import { Wrapper, Status } from '@googlemaps/react-wrapper'
 import { isLatLngLiteral } from '@googlemaps/typescript-guards'
 import { createCustomEqual } from 'fast-equals'
 
-import { drawMachine } from '../machines/draw'
 import { Controls } from './Controls'
-import { roadSelectorMachine } from '../machines/road'
+import { GlobalStateContext } from '../pages/_app'
+import { RoadCondition } from '../machines/draw'
+
+const ROAD_COLORS = {
+  'very good': '#02FC62',
+  good: '#0000FF',
+  average: '#555555',
+  bad: '#FF0000',
+}
 
 const render = (status: Status) => {
   return <div>{status}</div>
@@ -139,10 +146,39 @@ export const DrawLayer = ({ map }: DrawLayerProps) => {
   const [drawingManager, setDrawingManager] =
     useState<google.maps.drawing.DrawingManager>()
   const [initialDraw, setInitialDraw] = useState(false)
-  const [color, setColor] = useState<string>('#BADA55')
 
-  const [state, send] = useMachine(drawMachine)
+  const globalServices = useContext(GlobalStateContext)
+  const [state, send] = useActor(globalServices.drawService)
 
+  // Draw existing paths TODO: fix initialDraw hack
+  globalServices.drawService.onTransition((t) => {
+    if (
+      t.value === 'drawing' &&
+      state.context.existingPaths &&
+      !initialDraw &&
+      map
+    ) {
+      setInitialDraw(true)
+
+      state.context.existingPaths.forEach((path) => {
+        var snappedPolyline = new google.maps.Polyline({
+          path: path.latlngString.map((p: any) => ({
+            ...p,
+            lat: Number(p.lat),
+            lng: Number(p.lng),
+          })),
+          strokeColor: ROAD_COLORS[path.condition as RoadCondition],
+          strokeWeight: 10,
+          strokeOpacity: 0.5,
+          draggable: true,
+          editable: true,
+        })
+        snappedPolyline.setMap(map)
+      })
+    }
+  })
+
+  // Create drawing manager instance
   useEffect(() => {
     const manager = new google.maps.drawing.DrawingManager({
       drawingMode: google.maps.drawing.OverlayType.POLYLINE,
@@ -161,27 +197,33 @@ export const DrawLayer = ({ map }: DrawLayerProps) => {
     }
   }, [])
 
+  // Add listener to drawingManager
   useEffect(() => {
     if (drawingManager && !drawingManager.getMap() && map) {
       drawingManager.setMap(map)
       drawingManager.addListener('polylinecomplete', (poly: any) => {
         const path = poly.getPath()
-
         const pathValues = []
+
         for (let i = 0; i < path.getLength(); i++) {
           pathValues.push(path.getAt(i).toUrlValue())
         }
-
-        send({ type: 'FINISH_DRAWING', path: pathValues.join('|') })
+        send({
+          type: 'FINISH_DRAWING',
+          path: pathValues.join('|'),
+        })
         poly.setMap(null)
       })
     }
   }, [drawingManager])
 
+  // Draw new routes
   useEffect(() => {
     if (!map) {
       return
     }
+
+    const color = ROAD_COLORS[state.context.roadCondition]
     var snappedPolyline = new google.maps.Polyline({
       path: state.context.snappedPath,
       strokeColor: color,
@@ -194,32 +236,10 @@ export const DrawLayer = ({ map }: DrawLayerProps) => {
     snappedPolyline.setMap(map)
   }, [state.context.snappedPath])
 
-  useEffect(() => {
-    if (!map || !state.context.existingPaths || initialDraw) {
-      return
-    }
-    state.context.existingPaths.forEach((path) => {
-      var snappedPolyline = new google.maps.Polyline({
-        path: path.map((p: any) => ({
-          ...p,
-          lat: Number(p.lat),
-          lng: Number(p.lng),
-        })),
-        strokeColor: '#BADA55',
-        strokeWeight: 10,
-        strokeOpacity: 0.5,
-        draggable: true,
-        editable: true,
-      })
-      setInitialDraw(true)
-      snappedPolyline.setMap(map)
-    })
-  }, [state.context.existingPaths])
-
   return (
     <div className="">
       <div className="absolute right-0 top-0 w-60 py-2 px-4 bg-white">
-        <Controls onColorUpdate={(color: string) => setColor(color)} />
+        <Controls />
       </div>
     </div>
   )
