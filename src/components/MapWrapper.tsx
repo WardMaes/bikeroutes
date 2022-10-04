@@ -8,7 +8,7 @@ import { Controls } from './Controls'
 import { GlobalStateContext } from '../pages/_app'
 import { RoadCondition } from '../machines/draw'
 
-const ROAD_COLORS = {
+export const ROAD_COLORS = {
   'very good': '#02FC62',
   good: '#0000FF',
   average: '#555555',
@@ -90,7 +90,7 @@ export const Map: React.FC<MapProps> = ({
   return (
     <>
       <div ref={ref} style={style} />
-      <DrawLayer map={map} />
+      {map && <DrawLayer mapProp={map} />}
       {React.Children.map(children, (child) => {
         if (React.isValidElement(child)) {
           // set the map prop on the child component
@@ -139,44 +139,30 @@ function useDeepCompareEffectForMaps(
 }
 
 type DrawLayerProps = {
-  map: google.maps.Map | undefined
+  mapProp: google.maps.Map
 }
 
-export const DrawLayer = ({ map }: DrawLayerProps) => {
+export const DrawLayer = ({ mapProp }: DrawLayerProps) => {
   const [drawingManager, setDrawingManager] =
     useState<google.maps.drawing.DrawingManager>()
-  const [initialDraw, setInitialDraw] = useState(false)
 
   const globalServices = useContext(GlobalStateContext)
   const [state, send] = useActor(globalServices.drawService)
 
-  // Draw existing paths TODO: fix initialDraw hack
-  globalServices.drawService.onTransition((t) => {
-    if (
-      t.value === 'drawing' &&
-      state.context.existingPaths &&
-      !initialDraw &&
-      map
-    ) {
-      setInitialDraw(true)
-
-      state.context.existingPaths.forEach((path) => {
-        var snappedPolyline = new google.maps.Polyline({
-          path: path.latlngString.map((p: any) => ({
-            ...p,
-            lat: Number(p.lat),
-            lng: Number(p.lng),
-          })),
-          strokeColor: ROAD_COLORS[path.condition as RoadCondition],
-          strokeWeight: 10,
-          strokeOpacity: 0.5,
-          draggable: true,
-          editable: true,
-        })
-        snappedPolyline.setMap(map)
-      })
+  const mouseoverListener = (
+    e: google.maps.MapMouseEvent,
+    polyline: google.maps.Polyline
+  ) => {
+    const { latLng } = e
+    if (!latLng) {
+      return
     }
-  })
+    if (google.maps.geometry.poly.isLocationOnEdge(latLng, polyline, 10e-1)) {
+      console.log(
+        globalServices.drawService.getSnapshot().context.existingPaths.length
+      )
+    }
+  }
 
   // Create drawing manager instance
   useEffect(() => {
@@ -195,31 +181,51 @@ export const DrawLayer = ({ map }: DrawLayerProps) => {
     if (manager) {
       setDrawingManager(manager)
     }
+    send({ type: 'SET_MAP', map: mapProp })
   }, [])
+
+  useEffect(() => {
+    // Draw existing paths
+    state.context.existingPaths &&
+      state.context.existingPaths.forEach((polyline) => {
+        polyline.setMap(state.context.map)
+
+        if (!polyline.get('haslistener')) {
+          polyline.set('haslistener', true)
+          polyline.addListener('mouseover', (e: google.maps.MapMouseEvent) =>
+            mouseoverListener(e, polyline)
+          )
+        }
+      })
+  }, [state.context.existingPaths])
 
   // Add listener to drawingManager
   useEffect(() => {
-    if (drawingManager && !drawingManager.getMap() && map) {
-      drawingManager.setMap(map)
-      drawingManager.addListener('polylinecomplete', (poly: any) => {
-        const path = poly.getPath()
-        const pathValues = []
+    if (drawingManager && !drawingManager.getMap() && state.context.map) {
+      drawingManager.setMap(state.context.map)
+      drawingManager.addListener(
+        'polylinecomplete',
+        (poly: google.maps.Polyline) => {
+          const path = poly.getPath()
+          const pathValues = []
 
-        for (let i = 0; i < path.getLength(); i++) {
-          pathValues.push(path.getAt(i).toUrlValue())
+          for (let i = 0; i < path.getLength(); i++) {
+            pathValues.push(path.getAt(i).toUrlValue())
+          }
+          send({
+            type: 'FINISH_DRAWING',
+            path: pathValues.join('|'),
+          })
+
+          poly.setMap(null)
         }
-        send({
-          type: 'FINISH_DRAWING',
-          path: pathValues.join('|'),
-        })
-        poly.setMap(null)
-      })
+      )
     }
   }, [drawingManager])
 
   // Draw new routes
   useEffect(() => {
-    if (!map) {
+    if (!state.context.map) {
       return
     }
 
@@ -233,13 +239,20 @@ export const DrawLayer = ({ map }: DrawLayerProps) => {
       editable: true,
     })
 
-    snappedPolyline.setMap(map)
+    snappedPolyline.setMap(state.context.map)
+    snappedPolyline.set('haslistener', true)
+    snappedPolyline.addListener('mouseover', (e: google.maps.MapMouseEvent) =>
+      mouseoverListener(e, snappedPolyline)
+    )
   }, [state.context.snappedPath])
 
   return (
     <div className="">
       <div className="absolute right-0 top-0 w-60 py-2 px-4 bg-white">
         <Controls />
+      </div>
+      <div className="absolute left-0 top-0 w-60 py-2 px-4 bg-white">
+        {JSON.stringify(state.value)}
       </div>
     </div>
   )

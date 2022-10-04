@@ -1,4 +1,5 @@
 import { assign, createMachine } from 'xstate'
+import { ROAD_COLORS } from '../components/MapWrapper'
 
 export type RoadType = 'fietsstrook' | 'none'
 
@@ -15,10 +16,12 @@ export type RoadSelectorContext = {
 type DrawContext = {
   drawnPath: any[] // this is what we get from the drawingmanager
   snappedPath: any[]
-  existingPaths: any[]
+  existingPaths: google.maps.Polyline[]
   roadCondition: RoadCondition
   roadSurface: RoadSurface
   roadType: RoadType
+  map: google.maps.Map | null
+  error: any
 }
 
 type DrawEvents =
@@ -42,13 +45,12 @@ type DrawEvents =
       type: 'SET_ROADTYPE'
       roadType: RoadType
     }
+  | {
+      type: 'SET_MAP'
+      map: google.maps.Map
+    }
 
-const processDrawing = async (
-  path: string,
-  roadCondition: RoadCondition,
-  roadSurface: RoadSurface,
-  roadType: RoadType
-) => {
+const processDrawing = async (context: DrawContext, path: string) => {
   // Snap a user-created polyline to roads and return the snapped path
   const res = await fetch('/api/google/roads', {
     method: 'POST',
@@ -64,6 +66,7 @@ const processDrawing = async (
     )
     snappedCoordinates.push({ lat: latlng.lat(), lng: latlng.lng() })
   }
+  const { roadCondition, roadSurface, roadType } = context
   await fetch('/api/routes', {
     method: 'PUT',
     body: JSON.stringify({
@@ -80,7 +83,28 @@ const processDrawing = async (
 const fetchRoutes = async () => {
   const res = await fetch('/api/routes')
   const data = await res.json()
-  return data
+
+  try {
+    // Convert API data to google.maps.Polyline
+    const polylines: google.maps.Polyline[] = data.map((path: any) => {
+      return new google.maps.Polyline({
+        path: path.latlngString.map((p: any) => ({
+          ...p,
+          lat: Number(p.lat),
+          lng: Number(p.lng),
+        })),
+        strokeColor: ROAD_COLORS[path.condition as RoadCondition],
+        strokeWeight: 10,
+        strokeOpacity: 0.5,
+        draggable: true,
+        editable: true,
+      })
+    })
+
+    return polylines
+  } catch (e) {
+    console.log('ERROR', e)
+  }
 }
 
 export const drawMachine = createMachine<DrawContext, DrawEvents>(
@@ -95,6 +119,8 @@ export const drawMachine = createMachine<DrawContext, DrawEvents>(
         roadCondition: 'average',
         roadSurface: 'asphalt',
         roadType: 'fietsstrook',
+        map: null,
+        error: null,
       } as DrawContext,
       events: {} as DrawEvents,
       services: {} as {
@@ -106,6 +132,16 @@ export const drawMachine = createMachine<DrawContext, DrawEvents>(
     initial: 'idle',
     states: {
       idle: {
+        on: {
+          SET_MAP: {
+            actions: assign((_, event) => ({
+              map: event.map,
+            })),
+            target: 'fetching',
+          },
+        },
+      },
+      fetching: {
         invoke: {
           src: async () => {
             const routes = await fetchRoutes()
@@ -118,11 +154,6 @@ export const drawMachine = createMachine<DrawContext, DrawEvents>(
             })),
           },
           onError: { target: 'error' },
-        },
-        on: {
-          SET_DRAWING: {
-            target: 'drawing',
-          },
         },
       },
       drawing: {
@@ -141,22 +172,29 @@ export const drawMachine = createMachine<DrawContext, DrawEvents>(
             if (event.type !== 'FINISH_DRAWING') {
               return Promise.resolve(context.snappedPath)
             }
-            return processDrawing(
-              event.path,
-              context.roadCondition,
-              context.roadSurface,
-              context.roadType
-            )
+            return processDrawing(context, event.path)
           },
           onDone: {
             target: 'drawing',
             actions: assign((context, event) => ({
               snappedPath: event.data,
-              existingPaths: [...(context.existingPaths || []), event.data],
+              existingPaths: [
+                ...(context.existingPaths || []),
+                new google.maps.Polyline({
+                  path: event.data.map((p: any) => ({
+                    ...p,
+                    lat: Number(p.lat),
+                    lng: Number(p.lng),
+                  })),
+                }),
+              ],
             })),
           },
           onError: {
             target: 'error',
+            actions: assign((context, event) => ({
+              error: event.data,
+            })),
           },
         },
       },
