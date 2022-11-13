@@ -9,16 +9,19 @@ import { createContext } from 'react'
 import { useInterpret } from '@xstate/react'
 import { drawMachine } from '../machines/draw'
 import { InterpreterFrom } from 'xstate'
+import { tutorialMachine } from '../machines/tutorial'
 
 export const GlobalStateContext = createContext({
   drawService: {} as InterpreterFrom<typeof drawMachine>,
+  tutorialService: {} as InterpreterFrom<typeof tutorialMachine>,
 })
 
 export const GlobalStateProvider = (props: any) => {
   const drawService = useInterpret(drawMachine)
+  const tutorialService = useInterpret(tutorialMachine)
 
   return (
-    <GlobalStateContext.Provider value={{ drawService }}>
+    <GlobalStateContext.Provider value={{ drawService, tutorialService }}>
       {props.children}
     </GlobalStateContext.Provider>
   )

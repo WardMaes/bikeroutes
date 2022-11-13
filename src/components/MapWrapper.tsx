@@ -1,13 +1,11 @@
-import React, { useState, useEffect, useContext } from 'react'
-import ReactDOMServer from 'react-dom/server'
+import React, { useState, useEffect, useContext, useRef } from 'react'
 import { useActor } from '@xstate/react'
 import { Wrapper, Status } from '@googlemaps/react-wrapper'
 import { isLatLngLiteral } from '@googlemaps/typescript-guards'
 import { createCustomEqual } from 'fast-equals'
 
-import { Controls } from './Controls'
 import { GlobalStateContext } from '../pages/_app'
-import { RoadCondition } from '../machines/draw'
+import { Vote } from './Vote'
 
 export const ROAD_COLORS = {
   'very good': '#02FC62',
@@ -60,7 +58,11 @@ export const Map: React.FC<MapProps> = ({
 
   React.useEffect(() => {
     if (ref.current && !map) {
-      setMap(new window.google.maps.Map(ref.current, {}))
+      setMap(
+        new window.google.maps.Map(ref.current, {
+          mapId: process.env.NEXT_PUBLIC_GMAPS_MAP_ID,
+        })
+      )
     }
   }, [ref, map])
 
@@ -147,9 +149,77 @@ type DrawLayerProps = {
 export const DrawLayer = ({ mapProp, mapRef }: DrawLayerProps) => {
   const [drawingManager, setDrawingManager] =
     useState<google.maps.drawing.DrawingManager>()
+  const [showPopup, setShowpopup] = useState(false)
 
   const globalServices = useContext(GlobalStateContext)
   const [state, send] = useActor(globalServices.drawService)
+
+  const [overlappingLines, setOverlappingLines] = useState<
+    google.maps.Polyline[]
+  >([])
+
+  const voteRef = useRef(null)
+
+  class Popup extends google.maps.OverlayView {
+    position: google.maps.LatLng
+    containerDiv: HTMLDivElement
+
+    constructor(position: google.maps.LatLng, content: HTMLElement) {
+      super()
+      this.position = position
+
+      content.classList.add('popup-bubble')
+
+      // This zero-height div is positioned at the bottom of the bubble.
+      const bubbleAnchor = document.createElement('div')
+
+      bubbleAnchor.classList.add('popup-bubble-anchor')
+      bubbleAnchor.appendChild(content)
+
+      // This zero-height div is positioned at the bottom of the tip.
+      this.containerDiv = document.createElement('div')
+      this.containerDiv.classList.add('popup-container')
+      this.containerDiv.classList.add('absolute')
+      this.containerDiv.appendChild(bubbleAnchor)
+
+      // Optionally stop clicks, etc., from bubbling up to the map.
+      Popup.preventMapHitsAndGesturesFrom(this.containerDiv)
+    }
+
+    /** Called when the popup is added to the map. */
+    onAdd() {
+      this.getPanes()!.floatPane.appendChild(this.containerDiv)
+    }
+
+    /** Called when the popup is removed from the map. */
+    onRemove() {
+      if (this.containerDiv.parentElement) {
+        this.containerDiv.parentElement.removeChild(this.containerDiv)
+      }
+    }
+
+    /** Called each frame when the popup needs to draw itself. */
+    draw() {
+      const divPosition = this.getProjection().fromLatLngToDivPixel(
+        this.position
+      )!
+
+      // Hide the popup when it is far out of view.
+      const display =
+        Math.abs(divPosition.x) < 4000 && Math.abs(divPosition.y) < 4000
+          ? 'block'
+          : 'none'
+
+      if (display === 'block') {
+        this.containerDiv.style.left = divPosition.x + 'px'
+        this.containerDiv.style.top = divPosition.y + 'px'
+      }
+
+      if (this.containerDiv.style.display !== display) {
+        this.containerDiv.style.display = display
+      }
+    }
+  }
 
   function project(latLng: google.maps.LatLng) {
     let siny = Math.sin((latLng.lat() * Math.PI) / 180)
@@ -164,31 +234,6 @@ export const DrawLayer = ({ mapProp, mapRef }: DrawLayerProps) => {
     )
   }
 
-  function createInfoWindowContent(latLng: google.maps.LatLng, zoom: number) {
-    const scale = 1 << zoom
-
-    const worldCoordinate = project(latLng)
-
-    const pixelCoordinate = new google.maps.Point(
-      Math.floor(worldCoordinate.x * scale),
-      Math.floor(worldCoordinate.y * scale)
-    )
-
-    const tileCoordinate = new google.maps.Point(
-      Math.floor((worldCoordinate.x * scale) / 256),
-      Math.floor((worldCoordinate.y * scale) / 256)
-    )
-
-    return [
-      'LatLng: ' + latLng,
-      'Zoom level: ' + zoom,
-      'World Coordinate: ' + worldCoordinate,
-      'Pixel Coordinate: ' + pixelCoordinate,
-      'Tile Coordinate: ' + tileCoordinate,
-      // ReactDOMServer.renderToString(<Controls />),
-    ].join('<br>')
-  }
-
   const mouseoverListener = (
     e: google.maps.MapMouseEvent,
     polyline: google.maps.Polyline
@@ -198,17 +243,22 @@ export const DrawLayer = ({ mapProp, mapRef }: DrawLayerProps) => {
       return
     }
     if (google.maps.geometry.poly.isLocationOnEdge(latLng, polyline, 10e-1)) {
-      console.log(
-        globalServices.drawService.getSnapshot().context.existingPaths.length
-      )
+      const paths =
+        globalServices.drawService.getSnapshot().context.existingPaths
 
-      // TODO: convert to custom popup
-      const coordInfoWindow = new google.maps.InfoWindow()
-      coordInfoWindow.setContent(
-        createInfoWindowContent(latLng, state.context.map.getZoom()!)
+      const lines = paths.filter((p) =>
+        google.maps.geometry.poly.isLocationOnEdge(latLng, p)
       )
-      coordInfoWindow.setPosition(latLng)
-      coordInfoWindow.open(state.context.map)
+      setOverlappingLines(lines)
+      const popup = new Popup(latLng, voteRef?.current!)
+
+      if (lines.length > 1) {
+        popup.setMap(mapProp)
+        setShowpopup(true)
+      } else {
+        popup.setMap(null)
+        setShowpopup(false)
+      }
     }
   }
 
@@ -218,7 +268,7 @@ export const DrawLayer = ({ mapProp, mapRef }: DrawLayerProps) => {
       drawingMode: google.maps.drawing.OverlayType.POLYLINE,
       drawingControl: true,
       drawingControlOptions: {
-        position: google.maps.ControlPosition.BOTTOM_CENTER,
+        position: google.maps.ControlPosition.TOP_CENTER,
         drawingModes: [google.maps.drawing.OverlayType.POLYLINE],
       },
       polylineOptions: {
@@ -296,11 +346,19 @@ export const DrawLayer = ({ mapProp, mapRef }: DrawLayerProps) => {
 
   return (
     <div className="">
-      <div className="absolute right-0 top-0 w-60 py-2 px-4 bg-white">
-        <Controls />
-      </div>
-      <div className="absolute left-0 top-0 w-60 py-2 px-4 bg-white">
-        {JSON.stringify(state.value)}
+      <div
+        ref={voteRef}
+        className={`px-4 py-3 absolute bg-white shadow-md rounded ${
+          showPopup ? '' : 'hidden'
+        }`}
+      >
+        <Vote
+          lines={overlappingLines}
+          onVote={(line) => {
+            // TODO: vote?
+            setShowpopup(false)
+          }}
+        />
       </div>
     </div>
   )

@@ -1,7 +1,7 @@
 import { assign, createMachine } from 'xstate'
 import { ROAD_COLORS } from '../components/MapWrapper'
 
-export type RoadType = 'fietsstrook' | 'none'
+export type RoadType = 'separated' | 'combined' | 'none'
 
 export type RoadSurface = 'asphalt' | 'concrete' | 'offroad'
 
@@ -118,7 +118,7 @@ export const drawMachine = createMachine<DrawContext, DrawEvents>(
         existingPaths: [],
         roadCondition: 'average',
         roadSurface: 'asphalt',
-        roadType: 'fietsstrook',
+        roadType: 'combined',
         map: null,
         error: null,
       } as DrawContext,
