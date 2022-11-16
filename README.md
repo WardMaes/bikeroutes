@@ -1,5 +1,3 @@
- Write up. Be sure to include a description of your project. Explain why you built your project and how you used Google Maps Platform.
-
 # Bikeroutes
 
 ## Inspiration
